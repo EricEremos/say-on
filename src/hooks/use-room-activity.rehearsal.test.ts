@@ -1,6 +1,32 @@
 import { describe, expect, it } from "vitest";
 import { rehearsalCatalogKey } from "../lib/questions";
-import { readRehearsalActivity, rehearsalActivityStorageKey } from "./use-room-activity";
+import { readRehearsalActivity, rehearsalActivityStorageKey, runExclusiveRehearsalUpdate } from "./use-room-activity";
+
+// Regression case for the 2026-09-25 browser-local rehearsal: two tabs sending chat at the same
+// moment each read the same stored list, and the later write dropped the other tab's message.
+describe("rehearsal activity writes across tabs", () => {
+  it("runs each read-modify-write inside a Web Lock named for the room's storage key", async () => {
+    const requested: string[] = [];
+    let insideLock = false;
+    const locks = {
+      request: async (name: string, callback: () => void): Promise<void> => {
+        requested.push(name);
+        insideLock = true;
+        try { callback(); } finally { insideLock = false; }
+      },
+    };
+    let ranInsideLock = false;
+    await runExclusiveRehearsalUpdate(locks, rehearsalActivityStorageKey(3), () => { ranInsideLock = insideLock; });
+    expect(requested).toEqual([rehearsalActivityStorageKey(3)]);
+    expect(ranInsideLock).toBe(true);
+  });
+
+  it("still writes directly in a browser without Web Locks", async () => {
+    let ran = false;
+    await runExclusiveRehearsalUpdate(undefined, rehearsalActivityStorageKey(3), () => { ran = true; });
+    expect(ran).toBe(true);
+  });
+});
 
 // Regression case for the 2026-09-24 multi-client rehearsal finding: a chat message sent in one
 // browser-local rehearsal room was visible from a separately created rehearsal room in the same

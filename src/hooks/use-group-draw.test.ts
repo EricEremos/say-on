@@ -1,6 +1,33 @@
 import { describe, expect, it } from "vitest";
 import type { GroupDraw } from "../lib/group-draws";
-import { mergeRemoteDrawHistory, reconcileRemoteDrawHistory } from "./use-group-draw";
+import { balanceCards } from "../lib/questions";
+import { mergeRemoteDrawHistory, reconcileRemoteCardOptions, reconcileRemoteDrawHistory } from "./use-group-draw";
+
+// The 2026-09-25 connected rehearsal: the turn owner could not get three cards because options
+// above question 29 (the old 30-question catalog) failed validation, and such draws would have
+// been dropped from every client's history.
+describe("current Balance catalog question indexes", () => {
+  it("accepts card options and draws up to the last question of the 60-question catalog", () => {
+    const last = balanceCards.length - 1;
+    expect(last).toBe(59);
+    expect(reconcileRemoteCardOptions([
+      { card_index: 2, question_index: last },
+      { card_index: 0, question_index: 30 },
+      { card_index: 1, question_index: 7 },
+    ])).toEqual([{ cardIndex: 0, questionIndex: 30 }, { cardIndex: 1, questionIndex: 7 }, { cardIndex: 2, questionIndex: last }]);
+    expect(reconcileRemoteDrawHistory([
+      { group_number: 4, round_number: 1, draw_index: 0, chosen_card: 2, question_index: last, chosen_at: "2026-09-25T06:00:00Z" },
+    ])).toHaveLength(1);
+  });
+
+  it("still rejects an index beyond every catalog", () => {
+    expect(reconcileRemoteCardOptions([
+      { card_index: 0, question_index: balanceCards.length },
+      { card_index: 1, question_index: 1 },
+      { card_index: 2, question_index: 2 },
+    ])).toBeNull();
+  });
+});
 
 describe("remote group-draw reconciliation", () => {
   it("clears retained cards at reset, then lets the restarted room begin again from card one", () => {

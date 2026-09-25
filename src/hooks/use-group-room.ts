@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { clearRehearsalDraws } from "../lib/group-draws";
 import { canSetExpectedAttendance, canStartGroup, normalizeHandoffCode, type GroupRoomPhase } from "../lib/group-room";
@@ -253,6 +253,11 @@ const useRemoteGroupRoom = (eventId: string | null, inviteCode: string | null, r
   const canJoinByNumber = requestedGroupNumber !== null;
   const canJoinWithDisplayName = shouldJoinRemoteRoom(inviteCode, requestedGroupNumber, normalizedDisplayName);
   const [room, setRoom] = useState<GroupRoom | null>(null);
+  // Realtime handlers and the heartbeat read the latest room through this ref, so a room update
+  // never tears down and re-subscribes the channel (changes arriving mid-rejoin would be lost).
+  const roomRef = useRef<GroupRoom | null>(null);
+  useEffect(() => { roomRef.current = room; }, [room]);
+  const hasRoom = room !== null;
   const [groupNumber, setGroupNumber] = useState<number | null>(null);
   const [isJoining, setIsJoining] = useState(true);
   const [isWorking, setIsWorking] = useState(false);
@@ -294,17 +299,18 @@ const useRemoteGroupRoom = (eventId: string | null, inviteCode: string | null, r
   }, []);
 
   const releaseIfEventMenuIsNewer = useCallback(async (): Promise<boolean> => {
-    if (client === null || eventId === null || groupNumber === null || room === null) return false;
+    const currentRoom = roomRef.current;
+    if (client === null || eventId === null || groupNumber === null || currentRoom === null) return false;
     const released = await didRemoteRoomRelease(
       async (params) => client.rpc("get_group_room_release_status", params),
-      room,
+      currentRoom,
       eventId,
       groupNumber,
     );
     if (!released) return false;
     releaseRoomToLobby();
     return true;
-  }, [client, eventId, groupNumber, releaseRoomToLobby, room]);
+  }, [client, eventId, groupNumber, releaseRoomToLobby]);
 
   useEffect(() => {
     if (client === null || eventId === null || (!canJoinByCode && !canJoinByNumber)) {
@@ -347,7 +353,7 @@ const useRemoteGroupRoom = (eventId: string | null, inviteCode: string | null, r
       .on("postgres_changes", { event: "*", schema: "public", table: "group_room_status", filter: `event_id=eq.${eventId}` }, (payload) => {
         const row = payload.new;
         const status = RemoteRoomStatusSchema.safeParse(row);
-        if (status.success && shouldReleaseRoomMember(room, status.data, groupNumber)) {
+        if (status.success && shouldReleaseRoomMember(roomRef.current, status.data, groupNumber)) {
           releaseRoomToLobby();
           return;
         }
@@ -357,10 +363,10 @@ const useRemoteGroupRoom = (eventId: string | null, inviteCode: string | null, r
       })
       .subscribe((status) => { if (active) setChannelProblem(realtimeStatusProblem(status, "대기방")); });
     return () => { active = false; void client.removeChannel(channel); };
-  }, [client, eventId, groupNumber, refreshCurrentRoom, releaseRoomToLobby, room]);
+  }, [client, eventId, groupNumber, refreshCurrentRoom, releaseRoomToLobby]);
 
   useEffect(() => {
-    if (client === null || eventId === null || groupNumber === null || room === null) return undefined;
+    if (client === null || eventId === null || groupNumber === null || !hasRoom) return undefined;
     let active = true;
     const touch = async (): Promise<void> => {
       if (document.visibilityState !== "visible") return;
@@ -369,7 +375,7 @@ const useRemoteGroupRoom = (eventId: string | null, inviteCode: string | null, r
         const parsed = parseGroupRoom(result.data);
         if (!active) return;
         if (result.error === null && parsed !== null) {
-          if (shouldReleaseRoomMember(room, {
+          if (shouldReleaseRoomMember(roomRef.current, {
             group_number: groupNumber,
             phase: parsed.phase,
             event_menu_revision: parsed.eventMenuRevision
@@ -394,7 +400,7 @@ const useRemoteGroupRoom = (eventId: string | null, inviteCode: string | null, r
       window.clearInterval(heartbeatId);
       document.removeEventListener("visibilitychange", touchWhenVisible);
     };
-  }, [client, eventId, groupNumber, refreshCurrentRoom, releaseIfEventMenuIsNewer, releaseRoomToLobby, room]);
+  }, [client, eventId, groupNumber, hasRoom, refreshCurrentRoom, releaseIfEventMenuIsNewer, releaseRoomToLobby]);
 
   const invokeRoomAction = useCallback(async (name: string, params: Record<string, string | number | boolean>): Promise<boolean> => {
     if (client === null || eventId === null || isWorking) return false;

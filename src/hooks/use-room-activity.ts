@@ -244,6 +244,21 @@ const writeRehearsal = (storageKey: string, next: RehearsalActivity): void => {
   window.dispatchEvent(new StorageEvent("storage", { key: storageKey }));
 };
 
+type RehearsalLocks = Readonly<{ request: (name: string, callback: () => void) => Promise<unknown> }>;
+
+// localStorage has no atomic update across tabs: two tabs sending at the same moment each read the
+// same list, and the later write drops the other's message. A Web Lock named for the room
+// serializes the read-modify-write across same-origin tabs; without Web Locks, write directly.
+export const runExclusiveRehearsalUpdate = async (locks: RehearsalLocks | undefined, storageKey: string, action: () => void): Promise<void> => {
+  if (locks === undefined) {
+    action();
+    return;
+  }
+  await locks.request(storageKey, () => { action(); });
+};
+
+const browserLocks = (): RehearsalLocks | undefined => (typeof navigator !== "undefined" && "locks" in navigator ? navigator.locks : undefined);
+
 const useRehearsalRoomActivity = (sun: number, room: GroupRoom | null, latestDraw: GroupDraw | null): RoomActivityTransport => {
   const storageKey = rehearsalActivityStorageKey(sun);
   const [activity, setActivity] = useState<RehearsalActivity>(() => readRehearsal(storageKey));
@@ -272,8 +287,14 @@ const useRehearsalRoomActivity = (sun: number, room: GroupRoom | null, latestDra
     turn,
     vote: latestDraw !== null && room?.selectedGame === "balance" ? { roundNumber: latestDraw.roundNumber, drawIndex: latestDraw.drawIndex, aCount: currentVote === "a" ? 1 : 0, bCount: currentVote === "b" ? 1 : 0, myChoice: currentVote } : null
   };
-  // Re-read the stored activity right before writing so a message sent from another tab moments earlier is not overwritten.
-  const update = (mutate: (current: RehearsalActivity) => RehearsalActivity): void => { const next = mutate(readRehearsal(storageKey)); writeRehearsal(storageKey, next); setActivity(next); };
+  // Re-read the stored activity inside a cross-tab lock so a message another tab is writing at the same moment is never overwritten.
+  const update = (mutate: (current: RehearsalActivity) => RehearsalActivity): void => {
+    void runExclusiveRehearsalUpdate(browserLocks(), storageKey, () => {
+      const next = mutate(readRehearsal(storageKey));
+      writeRehearsal(storageKey, next);
+      setActivity(next);
+    }).catch(() => setProblem("이 브라우저에 저장하지 못했어요. 잠시 후 다시 시도해 주세요."));
+  };
   const sendMessage = async (content: string): Promise<boolean> => {
     const normalized = content.replace(/\r\n?/gu, "\n").replace(/[^\S\r\n]+/gu, " ").trim();
     if (normalized.length === 0 || normalized.length > 300) {

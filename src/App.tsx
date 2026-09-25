@@ -61,6 +61,9 @@ export const saveRoomDisplayName = (value: string, storage: DisplayNameStorage |
   try { storage?.setItem(roomDisplayNameStorageKey, normalizedValue); } catch { undefined; }
 };
 
+// A send can finish seconds later (it waits for the room refresh); keep anything typed meanwhile.
+export const draftAfterSend = (current: string, sent: string): string => (current.trim() === sent ? "" : current);
+
 export const persistRoomDisplayNameAfterRemoteUpdate = async (
   value: string,
   updateDisplayName: (displayName: string) => Promise<boolean>,
@@ -298,7 +301,7 @@ const RoomChat = ({ activity, selfDisplayName, showProblem = true }: Readonly<{ 
   const send = (): void => {
     const message = draft.trim();
     if (message.length === 0 || activity.isSending) return;
-    void activity.sendMessage(message).then((didSend) => { if (didSend) setDraft(""); });
+    void activity.sendMessage(message).then((didSend) => { if (didSend) setDraft((current) => draftAfterSend(current, message)); });
   };
 
   const submit = (event: FormEvent<HTMLFormElement>): void => { event.preventDefault(); send(); };

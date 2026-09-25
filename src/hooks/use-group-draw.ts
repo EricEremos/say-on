@@ -3,22 +3,26 @@ import { z } from "zod";
 import { broadcastDraws, cardQuestionIndex, chooseRehearsalCard, createDrawChannel, groupDrawRealtimeFilter, maximumGroupDraws, readRehearsalDraws, rehearsalDrawStorageKey } from "../lib/group-draws";
 import type { GroupDraw } from "../lib/group-draws";
 import { isMyCardTurn, type GroupRoomPhase } from "../lib/group-room";
-import type { GameKey } from "../lib/questions";
+import { balanceCards, questions, type GameKey } from "../lib/questions";
 import { supabase } from "../lib/supabase";
 import { realtimeStatusProblem } from "../lib/realtime-status";
+
+// Question indexes are bounded by the largest catalog (Icebreaker 17, Balance 60); the database
+// checks the same range (supabase/public/migrations/20260925100000_balance_v2_question_range.sql).
+const maximumQuestionIndex = Math.max(questions.length, balanceCards.length) - 1;
 
 const RemoteDrawSchema = z.object({
   group_number: z.number().int().min(1).max(32767),
   round_number: z.number().int().min(1).default(1),
   draw_index: z.number().int().min(0).max(4),
   chosen_card: z.number().int().min(0).max(2),
-  question_index: z.number().int().min(0).max(29),
+  question_index: z.number().int().min(0).max(maximumQuestionIndex),
   chosen_at: z.string().datetime({ offset: true })
 });
 
 const RemoteCardOptionSchema = z.object({
   card_index: z.number().int().min(0).max(2),
-  question_index: z.number().int().min(0).max(29)
+  question_index: z.number().int().min(0).max(maximumQuestionIndex)
 });
 
 export type GroupCardOption = Readonly<{ cardIndex: number; questionIndex: number }>;
@@ -105,7 +109,6 @@ const useRemoteGroupDraw = (eventId: string | null, sun: number | null, roundNum
     if (client === null || eventId === null || sun === null || !enabled) {
       setHistory([]);
       setProblem(null);
-      setChannelProblem(null);
       return undefined;
     }
     if (isFreshRoom) setHistory([]);
@@ -116,6 +119,15 @@ const useRemoteGroupDraw = (eventId: string | null, sun: number | null, roundNum
       if (active) setHistory((current) => mergeRemoteDrawHistory(current, result.data, snapshot));
     };
     void load();
+    return () => { active = false; };
+  }, [client, enabled, eventId, phase, revision, roundNumber, sun]);
+  // One channel per room: re-subscribing on every room revision would drop draws inserted mid-rejoin.
+  useEffect(() => {
+    if (client === null || eventId === null || sun === null || !enabled) {
+      setChannelProblem(null);
+      return undefined;
+    }
+    let active = true;
     const channel = client.channel(`say-on-draw-${sun}`).on("postgres_changes", { event: "INSERT", schema: "public", table: "group_draws", filter: groupDrawRealtimeFilter(eventId) }, (payload) => {
       const draw = toDraw(payload.new);
       if (draw !== null && draw.sun === sun && active) setHistory((current) => current.some((item) => item.roundNumber === draw.roundNumber && item.drawIndex === draw.drawIndex) ? current : [...current, draw].sort(byRoundAndDraw));
@@ -124,7 +136,7 @@ const useRemoteGroupDraw = (eventId: string | null, sun: number | null, roundNum
       if (active) setChannelProblem(nextProblem);
     });
     return () => { active = false; void client.removeChannel(channel); };
-  }, [client, enabled, eventId, phase, revision, roundNumber, sun]);
+  }, [client, enabled, eventId, sun]);
   const groupHistory = sun === null ? [] : (isFreshRoom ? [] : history).filter((draw) => draw.sun === sun).sort(byRoundAndDraw);
   const draws = groupHistory.filter((draw) => draw.roundNumber === roundNumber);
   const isCurrentSelector = enabled && phase === "live" && draws.length < maximumGroupDraws && isMyCardTurn(roundNumber, draws.length, participantCount, turnPosition);

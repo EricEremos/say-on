@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import source from "./App.tsx?raw";
 import groupRoomSource from "./hooks/use-group-room.ts?raw";
-import { GuidebookPage, JoinPage, LiveRoom, RoomInviteCode, WaitingRoom, persistRoomDisplayNameAfterRemoteUpdate, saveRoomDisplayName, savedRoomDisplayName, shouldShowRoomLoading } from "./App";
+import { GuidebookPage, JoinPage, LiveRoom, RoomInviteCode, WaitingRoom, draftAfterSend, persistRoomDisplayNameAfterRemoteUpdate, saveRoomDisplayName, savedRoomDisplayName, shouldShowRoomLoading } from "./App";
 import type { GroupDrawTransport } from "./hooks/use-group-draw";
 import type { GroupRoom, GroupRoomTransport } from "./hooks/use-group-room";
 import type { RoomActivityTransport } from "./hooks/use-room-activity";
@@ -152,6 +152,14 @@ describe("WaitingRoom", () => {
 
     await expect(persistRoomDisplayNameAfterRemoteUpdate("  새  별명  ", updateDisplayName, storage)).resolves.toBe("새 별명");
     expect(values.get("say-on-room-display-name")).toBe("새 별명");
+  });
+
+  // Regression case for the 2026-09-25 connected rehearsal: a send that completed late (after its
+  // post-send refresh) cleared the composer even though the next message had been typed meanwhile.
+  it("clears the chat composer only when it still holds the message that was sent", () => {
+    expect(draftAfterSend("  잘 들었어요  ", "잘 들었어요")).toBe("");
+    expect(draftAfterSend("다음 이야기", "잘 들었어요")).toBe("다음 이야기");
+    expect(draftAfterSend("", "잘 들었어요")).toBe("");
   });
 
   it("does not overwrite a nickname when the room update fails", async () => {
