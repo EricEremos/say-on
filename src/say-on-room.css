@@ -1,0 +1,297 @@
+/*
+ * Say-On room surfaces: waiting room, Icebreaker live room, invite code, chat, and recovery cards.
+ * Loaded after styles.css (see main.tsx) and scoped to .room-shell--say, so the legacy layers stay
+ * untouched for any surface that does not opt in. Values follow the Say-On color and dimension
+ * tokens and match src/say-on.css and src/components/balance-question.css.
+ */
+.room-shell.room-shell--say {
+  --say-canvas: #f5f1e8;
+  --say-surface: #fffcf5;
+  --say-ink: #282824;
+  --say-ink-hover: #3b3a35;
+  --say-secondary: #62615a;
+  --say-accent: #a84432;
+  --say-line: #d8d2c6;
+  --say-line-soft: #c6bfb2;
+  --say-border: #827c71;
+  --say-hover-border: #4e5861;
+  --say-focus: #285c83;
+  --say-selected: #f9eae1;
+  --say-danger: #9b3025;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  min-height: 100svh;
+  margin: 0;
+  padding: 40px max(24px, calc((100vw - 1248px) / 2)) 64px;
+  gap: 28px;
+  align-content: start;
+  background: var(--say-canvas);
+  color: var(--say-ink);
+}
+.room-shell--say *, .room-shell--say *::before, .room-shell--say *::after { box-sizing: border-box; }
+.room-shell--say > .room-shell__image, .room-shell--say > .room-shell__wash { display: none; }
+
+/* Top line and wordmark */
+.room-shell--say .room-topline { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; margin: 0; }
+.room-shell--say .room-topline .brand { display: inline-flex; align-items: center; min-height: 44px; color: var(--say-ink); font-size: 24px; font-weight: 800; letter-spacing: -.055em; text-transform: none; text-decoration: none; }
+.room-shell--say .room-topline .brand:focus-visible { outline: 3px solid var(--say-focus); outline-offset: 4px; border-radius: 4px; }
+
+/* Shared controls */
+.room-shell--say .button {
+  min-height: 56px;
+  padding: 14px 20px;
+  border: 1px solid var(--say-ink);
+  border-radius: 12px;
+  color: var(--say-surface);
+  background: var(--say-ink);
+  box-shadow: none;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  transform: none;
+}
+.room-shell--say .button:hover:not(:disabled) { background: var(--say-ink-hover); border-color: var(--say-ink-hover); box-shadow: none; transform: none; }
+.room-shell--say .button:active:not(:disabled) { transform: none; }
+.room-shell--say .button--quiet { min-height: 44px; padding: 8px 16px; border-color: var(--say-border); color: var(--say-ink); background: transparent; font-size: 15px; }
+.room-shell--say .button--quiet:hover:not(:disabled) { border-color: var(--say-hover-border); color: var(--say-ink); background: transparent; }
+.room-shell--say .button:disabled { opacity: .5; cursor: default; box-shadow: none; transform: none; }
+.room-shell--say .button:focus-visible,
+.room-shell--say .game-selection__option:focus-visible,
+.room-shell--say .question-card:focus-visible,
+.room-shell--say .room-invite__toggle:focus-visible,
+.room-shell--say .room-utility > summary:focus-visible,
+.room-shell--say .room-return a:focus-visible,
+.room-shell--say .room-chat__new-messages:focus-visible { outline: 3px solid var(--say-focus); outline-offset: 4px; }
+/* Headings that receive programmatic focus on arrival are not operable controls; no ring. */
+.room-shell--say h1[tabindex="-1"]:focus { outline: none; }
+
+/* Headings and status text */
+.room-shell--say .waiting-room h1,
+.room-shell--say .live-room h1,
+.room-shell--say .connection-card h1 {
+  max-width: none;
+  margin: 0;
+  color: var(--say-ink);
+  font-size: clamp(32px, 3.5vw, 48px);
+  font-weight: 750;
+  line-height: 1.4;
+  letter-spacing: -.055em;
+  word-break: keep-all;
+}
+.room-shell--say .room-problem { margin: 0; color: var(--say-danger); font-size: 14px; font-weight: 600; line-height: 1.6; }
+.room-shell--say .room-return { margin: 0; }
+.room-shell--say .room-return a { display: inline-flex; align-items: center; min-height: 44px; color: var(--say-secondary); font-size: 14px; font-weight: 500; text-underline-offset: 4px; }
+
+/* Invite code */
+.room-shell--say .room-invite { display: grid; gap: 12px; width: 100%; max-width: none; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.room-shell--say .room-invite__heading { display: flex; justify-content: flex-start; }
+.room-shell--say .room-invite__toggle { min-height: 44px; padding: 8px 16px; border: 1px solid var(--say-border); border-radius: 12px; color: var(--say-ink); background: transparent; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.room-shell--say .room-invite__toggle:hover { border-color: var(--say-hover-border); background: transparent; }
+.room-shell--say .room-invite__panel { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: min(100%, 560px); padding: 16px 20px; border: 1px solid var(--say-line); border-radius: 16px; background: var(--say-surface); }
+.room-shell--say .room-invite__code { display: grid; gap: 2px; }
+.room-shell--say .room-invite__code span { color: var(--say-secondary); font-size: 13px; font-weight: 500; letter-spacing: 0; }
+.room-shell--say .room-invite__code strong { color: var(--say-ink); font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: .08em; }
+
+/* Waiting room: content flow left, shared table and room chat right */
+.room-shell--say .waiting-room {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 28px;
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.room-shell--say .waiting-room__flow { display: grid; gap: 28px; min-width: 0; align-content: start; }
+.room-shell--say .waiting-room__aside { display: grid; gap: 24px; min-width: 0; align-content: start; }
+.room-shell--say .waiting-room__art { display: block; width: min(100%, 440px); height: auto; justify-self: center; object-fit: contain; }
+.room-shell--say .waiting-room__intro { display: grid; gap: 8px; margin: 0; }
+.room-shell--say .game-selection,
+.room-shell--say .game-status { display: grid; gap: 16px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.room-shell--say .game-selection h2 { margin: 0; color: var(--say-ink); font-size: 16px; font-weight: 700; letter-spacing: -.02em; }
+.room-shell--say .game-selection__options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.room-shell--say .game-selection__option {
+  grid-template-columns: 56px minmax(0, 1fr);
+  column-gap: 16px;
+  min-height: 104px;
+  padding: 20px;
+  border: 1px solid var(--say-border);
+  border-radius: 16px;
+  color: var(--say-ink);
+  background: var(--say-surface);
+  box-shadow: none;
+  text-align: left;
+  transform: none;
+  transition: border-color 180ms ease, background-color 180ms ease;
+}
+.room-shell--say .game-selection__illustration { width: 56px; height: 56px; }
+.room-shell--say .game-selection__option > strong { color: var(--say-ink); font-size: 18px; font-weight: 750; letter-spacing: -.04em; }
+.room-shell--say .game-selection__option > small { color: var(--say-secondary); font-size: 13px; font-weight: 500; }
+.room-shell--say .game-selection__option--selected { padding: 19px; border: 2px solid var(--say-accent); background: var(--say-selected); box-shadow: none; }
+.room-shell--say .game-selection__option--selected > small { color: var(--say-accent); }
+.room-shell--say .game-selection__option:disabled { opacity: .5; cursor: progress; }
+@media (hover: hover) and (pointer: fine) {
+  .room-shell--say .game-selection__option:hover:not(:disabled):not(.game-selection__option--selected) { border-color: var(--say-hover-border); box-shadow: none; transform: none; }
+}
+.room-shell--say .game-status { padding: 20px; border: 1px solid var(--say-line); border-radius: 16px; background: var(--say-surface); }
+.room-shell--say .game-status strong { color: var(--say-ink); font-size: 18px; font-weight: 750; letter-spacing: -.04em; }
+.room-shell--say .game-status p { margin: 4px 0 0; color: var(--say-secondary); font-size: 14px; font-weight: 500; }
+
+.room-shell--say .readiness-count { margin: 0; color: var(--say-ink); font-size: 16px; font-weight: 700; letter-spacing: -.02em; }
+.room-shell--say .readiness-progress { display: flex; gap: 6px; margin: -16px 0 0; }
+.room-shell--say .readiness-progress > span { flex: 1 1 0; height: 6px; border-radius: 999px; background: var(--say-line); box-shadow: none; }
+.room-shell--say .readiness-progress > .is-ready { background: var(--say-accent); }
+.room-shell--say .readiness-message { margin: -12px 0 0; color: var(--say-secondary); font-size: 14px; font-weight: 500; letter-spacing: 0; }
+
+.room-shell--say .participant-roster { display: grid; gap: 16px; padding: 20px; border: 1px solid var(--say-line); border-radius: 16px; background: var(--say-surface); box-shadow: none; }
+.room-shell--say .participant-roster__top { align-items: center; }
+.room-shell--say .participant-roster h2 { margin: 0; color: var(--say-ink); font-size: 16px; font-weight: 700; letter-spacing: -.02em; }
+.room-shell--say .participant-roster__list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 16px; margin: 0; padding: 0; list-style: none; }
+.room-shell--say .participant-roster__item { display: grid; gap: 2px; justify-content: start; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.room-shell--say .participant-roster__item strong { color: var(--say-ink); font-size: 16px; font-weight: 700; letter-spacing: -.02em; }
+.room-shell--say .participant-roster__item span { color: var(--say-accent); font-size: 13px; font-weight: 500; letter-spacing: 0; }
+.room-shell--say .participant-roster__empty { margin: 0; color: var(--say-secondary); font-size: 14px; font-weight: 500; }
+.room-shell--say .nickname-editor { display: grid; gap: 8px; }
+.room-shell--say .nickname-editor label { color: var(--say-ink); font-size: 14px; font-weight: 700; }
+.room-shell--say .nickname-editor input { min-height: 56px; padding: 14px 16px; border: 1px solid var(--say-border); border-radius: 12px; color: var(--say-ink); background: var(--say-surface); font: inherit; }
+.room-shell--say .nickname-editor input:focus-visible { outline: 3px solid var(--say-focus); outline-offset: 4px; }
+.room-shell--say .nickname-editor small { color: var(--say-secondary); font-size: 13px; font-weight: 400; }
+
+.room-shell--say .ready-control { display: grid; gap: 10px; justify-items: start; }
+.room-shell--say .ready-control .button { width: min(100%, 360px); }
+.room-shell--say .ready-control p { margin: 0; color: var(--say-secondary); font-size: 13px; font-weight: 500; }
+.room-shell--say .room-utility { padding: 0; border: 0; border-top: 1px solid var(--say-line); border-radius: 0; background: transparent; box-shadow: none; }
+.room-shell--say .room-utility > summary { display: flex; align-items: center; min-height: 44px; color: var(--say-secondary); font-size: 14px; font-weight: 600; cursor: pointer; }
+.room-shell--say .attendance-control h2 { color: var(--say-ink); font-size: 15px; font-weight: 700; }
+.room-shell--say .attendance-control__note { color: var(--say-secondary); font-size: 13px; }
+.room-shell--say .attendance-control__field { display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 6px 6px 6px 16px; border: 1px solid var(--say-border); border-radius: 12px; background: var(--say-surface); box-shadow: none; }
+.room-shell--say .attendance-control__field:focus-within { border-color: var(--say-focus); box-shadow: 0 0 0 3px rgba(40, 92, 131, .18); }
+.room-shell--say .attendance-control__field input { width: 3.5ch; min-height: 44px; color: var(--say-ink); background: transparent; font-size: 18px; font-weight: 700; }
+.room-shell--say .attendance-control__field > span { color: var(--say-secondary); font-size: 15px; }
+.room-shell--say .attendance-control__field .button { margin-left: auto; }
+
+/* Room chat (waiting room, Icebreaker, and Balance) */
+.room-shell--say .room-chat { border: 1px solid var(--say-line); border-radius: 16px; background: var(--say-surface); box-shadow: none; }
+.room-shell--say .room-chat__live > span { color: var(--say-secondary); }
+.room-shell--say .room-chat__live i { background: var(--say-accent); box-shadow: 0 0 0 4px rgba(168, 68, 50, .14); }
+.room-shell--say .room-chat__live strong { color: var(--say-secondary); }
+.room-shell--say .room-chat__avatar { color: var(--say-ink); background: #efe6d6; }
+.room-shell--say .room-chat__message-meta strong { color: var(--say-accent); }
+.room-shell--say .room-chat__message-meta span { color: var(--say-ink); background: var(--say-selected); }
+.room-shell--say .room-chat__message-meta time { color: var(--say-secondary); }
+.room-shell--say .room-chat__message p { color: var(--say-ink); font-weight: 500; }
+.room-shell--say .room-chat__message--mine .room-chat__message-copy { background: var(--say-selected); }
+.room-shell--say .room-chat__composer-field { border: 1px solid var(--say-border); border-radius: 12px; background: var(--say-surface); }
+.room-shell--say .room-chat__composer-field:focus-within { border-color: var(--say-focus); box-shadow: 0 0 0 3px rgba(40, 92, 131, .18); }
+.room-shell--say .room-chat__composer textarea { color: var(--say-ink); }
+.room-shell--say .room-chat__composer textarea::placeholder { color: #8a867c; }
+.room-shell--say .room-chat__composer .button { min-height: 44px; padding-inline: 16px; font-size: 14px; }
+.room-shell--say .room-chat__new-messages { color: var(--say-surface); background: var(--say-ink); }
+
+/* Recovery and progress cards */
+.room-shell--say .connection-card { display: grid; gap: 20px; width: min(100%, 550px); min-height: 0; margin: 64px auto 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+.room-shell--say .connection-card p { margin: 0; color: var(--say-secondary); line-height: 1.7; }
+.room-shell--say .connection-card .button { width: min(100%, 360px); }
+
+/* Icebreaker live room */
+.room-shell--say .live-room::before { content: none; }
+.room-shell--say .live-room.live-room--icebreaker {
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  gap: 32px;
+  align-content: start;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.room-shell--say .live-room__stage { display: grid; gap: 24px; min-width: 0; }
+.room-shell--say .choice-panel { display: grid; gap: 24px; }
+.room-shell--say .choice-panel > p { margin: 0; color: var(--say-ink); font-size: 16px; font-weight: 700; letter-spacing: -.02em; }
+.room-shell--say .question-card {
+  border: 1px solid var(--say-line-soft);
+  border-radius: 16px;
+  color: var(--say-ink);
+  background: var(--say-surface);
+  box-shadow: 0 1px 0 rgba(40, 40, 36, .05);
+  transform: none;
+}
+.room-shell--say .question-card::before, .room-shell--say .question-card::after { content: none; }
+.room-shell--say .question-card__art, .room-shell--say .question-card__wash { display: none; }
+.room-shell--say .question-card__illustration { transform: none; }
+.room-shell--say .question-card > .question-card__number { width: auto; height: auto; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: var(--say-accent); font-size: 24px; font-weight: 800; }
+.room-shell--say .question-card--selected { border: 2px solid var(--say-accent); background: var(--say-selected); box-shadow: none; transform: none; }
+.room-shell--say .question-card--selected .question-card__illustration { transform: none; }
+@media (hover: hover) and (pointer: fine) {
+  .room-shell--say .question-card:hover:not(:disabled) { box-shadow: 0 10px 22px rgba(40, 40, 36, .1); transform: translateY(-3px); }
+  .room-shell--say .question-card:hover:not(:disabled):not(.question-card--selected) { border-color: var(--say-hover-border); }
+  .room-shell--say .question-card:hover:not(:disabled) .question-card__illustration { transform: none; }
+}
+.room-shell--say .card-confirmation { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.room-shell--say .card-confirmation__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.room-shell--say .card-confirmation__actions .button:not(.button--quiet) { min-width: 200px; }
+.room-shell--say .prompt-card { min-height: 320px; padding: 40px; border: 1px solid var(--say-line); border-radius: 20px; color: var(--say-ink); background: var(--say-surface); box-shadow: none; }
+.room-shell--say .prompt-card::before { content: ""; display: block; position: absolute; z-index: 3; top: 40px; left: 40px; width: 52px; height: 5px; border-radius: 3px; background: var(--say-accent); }
+.room-shell--say .prompt-card__artwork, .room-shell--say .prompt-card__wash { display: none; }
+.room-shell--say .prompt-card__illustration { width: clamp(72px, 12vw, 112px); transform: none; }
+.room-shell--say .prompt-card > p { max-width: 18ch; margin: 72px 0 0; color: var(--say-ink); font-size: clamp(26px, 3vw, 40px); font-weight: 750; line-height: 1.45; letter-spacing: -.045em; word-break: keep-all; }
+.room-shell--say .turn-notice { max-width: none; margin: 0; padding: 0; color: var(--say-secondary); font-size: 14px; font-weight: 500; line-height: 1.6; }
+.room-shell--say .turn-notice::before { content: none; }
+.room-shell--say .turn-window { padding: 20px; border: 1px solid var(--say-line); border-radius: 16px; color: var(--say-ink); background: var(--say-surface); box-shadow: none; }
+.room-shell--say .turn-window h2 { margin: 0; color: var(--say-ink); font-size: 16px; font-weight: 700; letter-spacing: -.02em; }
+.room-shell--say .turn-window__time { color: var(--say-accent); }
+.room-shell--say .round-decision { display: grid; gap: 16px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.room-shell--say .round-decision h2 { margin: 0; color: var(--say-ink); font-size: clamp(26px, 3vw, 32px); font-weight: 750; letter-spacing: -.045em; }
+.room-shell--say .round-decision__actions { display: grid; gap: 12px; width: min(100%, 360px); }
+.room-shell--say .round-decision p { margin: 0; color: var(--say-secondary); }
+
+@media (min-width: 1040px) {
+  .room-shell--say .waiting-room { grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); column-gap: 64px; align-items: start; }
+  .room-shell--say .waiting-room__aside { position: sticky; top: 24px; }
+  .room-shell--say .live-room.live-room--icebreaker { grid-template-columns: minmax(0, 1fr) minmax(19rem, 23rem); align-items: start; }
+  .room-shell--say .live-room--icebreaker .live-room__support,
+  .room-shell--say .live-room--icebreaker .live-room__support--chat-only { grid-template-columns: minmax(0, 1fr); align-content: start; }
+  .room-shell--say .live-room--icebreaker .question-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1039px) {
+  /* One column: the decorative table sits above the flow, the chat below it. */
+  .room-shell--say .waiting-room__aside { display: contents; }
+  .room-shell--say .waiting-room__art { order: -1; width: auto; max-width: 100%; max-height: 240px; }
+}
+
+@media (max-width: 700px) {
+  .room-shell.room-shell--say { padding: 28px 24px max(32px, env(safe-area-inset-bottom)); gap: 24px; }
+  .room-shell--say .waiting-room h1,
+  .room-shell--say .live-room h1,
+  .room-shell--say .connection-card h1 { font-size: 32px; line-height: 1.5; }
+  .room-shell--say .game-selection__options { grid-template-columns: minmax(0, 1fr); }
+  .room-shell--say .game-selection__option { min-height: 88px; padding: 16px; }
+  .room-shell--say .game-selection__option--selected { padding: 15px; }
+  .room-shell--say .waiting-room__art { max-height: 200px; }
+  .room-shell--say .ready-control .button,
+  .room-shell--say .connection-card .button,
+  .room-shell--say .round-decision__actions { width: 100%; }
+  .room-shell--say .room-invite__panel { flex-direction: column; align-items: stretch; }
+  .room-shell--say .prompt-card { min-height: 260px; padding: 28px; }
+  .room-shell--say .prompt-card::before { top: 28px; left: 28px; }
+  .room-shell--say .prompt-card > p { margin-top: 56px; }
+  .room-shell--say .connection-card { margin-top: 32px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-shell--say .question-card,
+  .room-shell--say .game-selection__option { transition-duration: 1ms; }
+  .room-shell--say .question-card:hover:not(:disabled) { transform: none; }
+}

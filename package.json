@@ -1,0 +1,31 @@
+{
+  "name": "say-on",
+  "private": false,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "validate:balance": "node scripts/validate-balance-catalog.mjs content/balance.v2.json",
+    "capacity:rehearsal": "node --env-file-if-exists=.env.local scripts/capacity-rehearsal.mjs",
+    "export:public": "node scripts/create-public-export.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.2",
+    "react-grab": "^0.2.0",
+    "react-scan": "^0.5.7",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.4",
+    "vitest": "^3.2.4"
+  }
+}
