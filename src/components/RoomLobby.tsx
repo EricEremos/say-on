@@ -221,14 +221,13 @@ export const RoomLobby = () => {
         </section>
       ) : (
         <section className="say-lobby__content" aria-labelledby="say-heading">
-          <div className="say-lobby__intro">
-            <h1 id="say-heading">어떤 이야기부터<br />시작할까요?</h1>
-            <div className="say-arrival__actions say-lobby__actions">
-              <button className="say-action" type="button" disabled={isConnecting} onClick={() => setSheet({ kind: "create" })}>방 만들기</button>
-              <button ref={inviteAction} className="say-action say-action--secondary" type="button" onClick={() => setEntry("invite")}>초대 코드로 참여</button>
-            </div>
-          </div>
+          {/* Source order matches the phone layout (heading, rooms, actions) for keyboard and screen readers. */}
+          <h1 id="say-heading" className="say-lobby__title">어떤 이야기부터<br />시작할까요?</h1>
           <LobbyRoomList rooms={rooms} isLoading={isLoadingRooms || isConnecting} listProblem={listProblem} disabled={isWorking || isChecking} onEnter={enterRoom} onCreate={() => setSheet({ kind: "create" })} onRetry={refreshRooms} />
+          <div className="say-arrival__actions say-lobby__actions">
+            <button className="say-action" type="button" disabled={isConnecting} onClick={() => setSheet({ kind: "create" })}>방 만들기</button>
+            <button ref={inviteAction} className="say-action say-action--secondary" type="button" onClick={() => setEntry("invite")}>초대 코드로 참여</button>
+          </div>
         </section>
       )}
       {sheet?.kind === "create" ? <CreateRoomSheet supportsPasswords={supportsPasswords} isWorking={isWorking} problem={problem} onClose={closeSheet} onCreate={(roomName, password) => { void create(roomName, password); }} /> : null}
