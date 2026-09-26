@@ -137,8 +137,8 @@ async function validateOutput() {
     if (await exists(outputPath(blockedPath))) fail(`blocked output exists: ${blockedPath}`);
   }
 
-  const balanceArtDirectory = outputPath("public/images/say-on/balance-catalog-individual-v3");
-  const balanceArt = (await readdir(balanceArtDirectory)).filter((file) => file.endsWith(".png"));
+  const balanceArtDirectory = outputPath("public/images/say-on/balance-v4");
+  const balanceArt = (await readdir(balanceArtDirectory)).filter((file) => file.endsWith(".webp"));
   if (balanceArt.length !== 120) fail(`expected 120 individual Balance choice assets, found ${balanceArt.length}`);
 
   const violations = [];
@@ -205,7 +205,7 @@ for (const path of [
 await copyMatching("src", (path) => [".ts", ".tsx", ".css"].includes(extname(path)));
 for (const path of [
   "src/assets/cards/backgrounds-webp", "src/assets/card-back-stickers-webp", "public/images/say-on/icebreaker",
-  "public/images/say-on/balance-catalog-individual-v3", "supabase/public/migrations", "supabase/public/tests", "tests",
+  "public/images/say-on/balance-v4", "supabase/public/migrations", "supabase/public/tests", "tests",
 ]) await copyTree(path);
 await copyMatching("public/brand", (path) => extname(path) === ".webp");
 

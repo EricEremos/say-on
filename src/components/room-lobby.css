@@ -1,0 +1,100 @@
+/* Lobby, sheets and room-password controls. Approved board:
+   docs/wireframes/2026-09-26-say-on-lobby-password-v1.png. Tokens come from say-on.css. */
+
+.say-lobby { --say-line-soft: #d9d2c4; --say-muted: #62615a; --say-surface: #fffcf5; --say-error: #9b3025; }
+
+.say-lobby__content { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 480px); align-items: start; gap: 64px; min-height: 640px; padding-top: 96px; }
+.say-lobby__content--form { display: block; max-width: 550px; }
+.say-lobby__intro { position: sticky; top: 48px; }
+.say-lobby__actions { margin-top: 48px; }
+
+.say-lobby__rooms { display: grid; gap: 12px; }
+.say-lobby__rooms-head { display: flex; align-items: center; gap: 10px; min-height: 32px; }
+.say-lobby__rooms-head h2 { margin: 0; font-size: 20px; font-weight: 750; letter-spacing: -.04em; }
+.say-live { display: inline-flex; align-items: center; gap: 5px; color: var(--say-ink); font-size: 12px; font-weight: 750; letter-spacing: .04em; }
+.say-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--say-accent); }
+.say-lobby__refreshed { margin-left: auto; color: var(--say-muted); font-size: 13px; }
+
+.say-lobby__list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.say-lobby-room { display: grid; grid-template-columns: minmax(0, 1fr) auto 18px; align-items: center; gap: 12px; width: 100%; min-height: 76px; padding: 16px 16px 16px 20px; border: 1px solid var(--say-line-soft); border-radius: 16px; background: var(--say-surface); color: var(--say-ink); font: inherit; text-align: left; cursor: pointer; transition: border-color .15s ease, transform .15s ease; }
+.say-lobby-room:hover:not(:disabled) { border-color: #827c71; transform: translateY(-1px); }
+.say-lobby-room:disabled { cursor: default; background: #f0ebe1; color: #8a857a; }
+.say-lobby-room__main { display: grid; gap: 4px; min-width: 0; }
+.say-lobby-room__name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.say-lobby-room__name strong { overflow: hidden; font-size: 17px; font-weight: 700; letter-spacing: -.03em; text-overflow: ellipsis; white-space: nowrap; }
+.say-lobby-room__meta { color: var(--say-muted); font-size: 13px; }
+.say-lobby-room:disabled .say-lobby-room__meta { color: #9a958a; }
+.say-lobby-room__chevron { color: #8a857a; }
+.say-chip { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.say-chip--open { background: #f6e3dc; color: var(--say-accent); }
+.say-chip--full, .say-chip--playing { background: #e7e2d8; color: #6f6a60; }
+.say-lock-icon { flex: none; color: var(--say-ink); }
+
+.say-lobby__status { margin: 0; color: var(--say-muted); font-size: 14px; }
+.say-lobby__skeleton { display: grid; gap: 10px; }
+.say-lobby-skeleton { display: flex; align-items: center; gap: 16px; height: 76px; padding: 0 20px; border: 1px solid var(--say-line-soft); border-radius: 16px; background: var(--say-surface); }
+.say-lobby-skeleton i, .say-lobby-skeleton b { display: block; border-radius: 8px; background: #ebe5d9; }
+.say-lobby-skeleton i { width: 40%; height: 14px; }
+.say-lobby-skeleton b { width: 18%; height: 14px; margin-left: auto; }
+@media (prefers-reduced-motion: no-preference) {
+  .say-lobby-skeleton i, .say-lobby-skeleton b { animation: say-pulse 1.4s ease-in-out infinite; }
+}
+@keyframes say-pulse { 50% { opacity: .45; } }
+
+.say-lobby__empty { display: grid; justify-items: center; gap: 20px; padding: 32px 24px; border: 1px solid var(--say-line-soft); border-radius: 16px; background: var(--say-surface); text-align: center; }
+.say-lobby__empty p { display: grid; gap: 6px; margin: 0; }
+.say-lobby__empty strong { font-size: 18px; letter-spacing: -.03em; }
+.say-lobby__empty span { color: var(--say-muted); }
+.say-lobby__empty .say-action { max-width: 280px; }
+
+.say-gate { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; padding: 14px 16px; border-radius: 12px; font-size: 14px; font-weight: 600; line-height: 1.5; }
+.say-gate svg { flex: none; }
+.say-gate--error { border: 1px solid #d8a79c; background: #fbeee9; color: var(--say-error, #9b3025); }
+.say-gate--wait { border: 1px solid #d9d2c4; background: #f1ece2; color: #5d5950; font-weight: 500; }
+.say-link-button { min-height: 32px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
+
+/* Bottom sheet */
+.say-sheet { position: fixed; inset: 0; z-index: 40; display: flex; align-items: flex-end; justify-content: center; }
+.say-sheet__scrim { position: absolute; inset: 0; background: rgba(40, 40, 36, .42); }
+.say-sheet__panel { position: relative; display: grid; gap: 16px; width: min(100%, 520px); max-height: calc(100svh - 48px); overflow: auto; padding: 28px 24px max(28px, env(safe-area-inset-bottom)); border-radius: 24px 24px 0 0; background: var(--say-canvas, #f5f1e8); color: var(--say-ink, #282824); box-shadow: 0 -12px 40px rgba(40, 40, 36, .18); }
+.say-sheet__panel h2 { margin: 0; padding-right: 44px; font-size: 24px; font-weight: 750; line-height: 1.35; letter-spacing: -.045em; word-break: keep-all; }
+.say-sheet__handle { justify-self: center; width: 44px; height: 5px; margin-top: -12px; border-radius: 3px; background: #cfc8ba; }
+.say-sheet__close { position: absolute; top: 18px; right: 16px; display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 50%; background: transparent; color: var(--say-ink, #282824); cursor: pointer; }
+.say-sheet__icon { color: var(--say-accent, #a84432); }
+.say-sheet__icon .say-lock-icon { color: var(--say-accent, #a84432); }
+.say-sheet__lead { margin: -4px 0 4px; color: #62615a; line-height: 1.6; word-break: keep-all; }
+.say-sheet__form { display: grid; gap: 12px; }
+.say-sheet__form > label { margin-top: 4px; font-weight: 650; }
+.say-sheet__form input, .say-pin-input { width: 100%; min-height: 56px; padding: 14px 16px; border: 1px solid #827c71; border-radius: 12px; background: #fffcf5; color: var(--say-ink, #282824); font: inherit; }
+.say-pin-input { font-size: 22px; letter-spacing: .4em; }
+.say-sheet :focus-visible, .say-lobby :focus-visible, .say-password-form :focus-visible { outline: 3px solid #285c83; outline-offset: 3px; }
+@media (min-width: 701px) {
+  .say-sheet { align-items: center; }
+  .say-sheet__panel { border-radius: 24px; }
+  .say-sheet__handle { display: none; }
+}
+
+.say-toggle-row { display: flex; align-items: center; justify-content: space-between; min-height: 48px; margin-top: 4px; font-weight: 650; }
+.say-switch { position: relative; width: 56px; height: 32px; padding: 0; border: 0; border-radius: 999px; background: #cfc8ba; cursor: pointer; transition: background .15s ease; }
+.say-switch i { position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 50%; background: #fffcf5; box-shadow: 0 1px 3px rgba(0, 0, 0, .2); transition: transform .15s ease; }
+.say-switch--on { background: var(--say-accent, #a84432); }
+.say-switch--on i { transform: translateX(24px); }
+
+.say-password-form { display: grid; gap: 12px; }
+
+/* Room page: password gate and the waiting room's lock badge and host settings. */
+.say-room-lock { display: inline-flex; align-items: center; gap: 6px; width: max-content; padding: 6px 12px; border: 1px solid #d8a79c; border-radius: 999px; background: #fbeee9; color: var(--say-accent, #a84432); font-size: 13px; font-weight: 700; }
+.say-room-lock .say-lock-icon { color: var(--say-accent, #a84432); }
+.room-password-setting { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid #e4ddcf; }
+.room-password-setting__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.room-password-setting__actions { display: flex; gap: 8px; }
+
+@media (max-width: 700px) {
+  .say-lobby__content { grid-template-columns: 1fr; gap: 28px; min-height: 0; padding-top: 40px; }
+  .say-lobby__intro { position: static; display: contents; }
+  .say-lobby__intro h1 { order: 1; }
+  .say-lobby__rooms { order: 2; }
+  .say-lobby__actions { order: 3; width: 100%; margin-top: 8px; }
+}
+.room-password-setting h2 { margin: 0; color: var(--say-ink, #282824); font-size: 15px; font-weight: 700; letter-spacing: -.02em; }
+.room-password-setting__row > span { margin-right: auto; margin-left: 12px; color: #62615a; font-size: 14px; }

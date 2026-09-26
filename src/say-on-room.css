@@ -295,3 +295,22 @@
   .room-shell--say .game-selection__option { transition-duration: 1ms; }
   .room-shell--say .question-card:hover:not(:disabled) { transform: none; }
 }
+
+/* Balance card back: the question's two choice images with a small "VS" (approved game-art board,
+   docs/wireframes/2026-09-26-say-on-game-art-v1.png). */
+.room-shell--say .question-card__pair { position: absolute; z-index: 1; left: 5%; right: 5%; top: 56%; display: flex; align-items: center; justify-content: center; gap: 0; transform: translateY(-50%); pointer-events: none; }
+.room-shell--say .question-card__pair img { width: 48%; max-width: 132px; height: auto; aspect-ratio: 1; object-fit: contain; filter: drop-shadow(0 6px 8px rgba(40, 40, 36, .14)); }
+.room-shell--say .question-card__pair img:first-child { margin-right: -6px; }
+.room-shell--say .question-card__pair img:last-child { margin-left: -6px; }
+.room-shell--say .question-card__pair small { position: relative; z-index: 1; flex: none; display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid var(--say-line-soft); border-radius: 50%; background: var(--say-surface); color: var(--say-secondary); font-size: 9px; font-weight: 800; letter-spacing: .02em; }
+
+/* Icebreaker question card: the owner's Codex photo fills the card again and the question sits on
+   a translucent cream panel (the 2026-09-25 restyle had hidden the photo). */
+.room-shell--say .live-room--icebreaker .prompt-card { display: flex; flex-direction: column; justify-content: flex-start; min-height: clamp(420px, 58vh, 560px); padding: 18px; border: 0; background: #dfe7e6; }
+.room-shell--say .live-room--icebreaker .prompt-card::before { content: none; }
+.room-shell--say .live-room--icebreaker .prompt-card__artwork { display: block; }
+.room-shell--say .live-room--icebreaker .prompt-card__wash, .room-shell--say .live-room--icebreaker .prompt-card__illustration { display: none; }
+.room-shell--say .live-room--icebreaker .prompt-card > p { position: relative; z-index: 3; max-width: none; margin: 0; padding: 22px 24px 24px; border-radius: 16px; background: rgba(250, 247, 240, .9); box-shadow: 0 8px 24px rgba(40, 40, 36, .12); font-size: clamp(22px, 2.6vw, 32px); line-height: 1.45; text-shadow: none; }
+@supports (backdrop-filter: blur(6px)) {
+  .room-shell--say .live-room--icebreaker .prompt-card > p { background: rgba(250, 247, 240, .82); backdrop-filter: blur(6px); }
+}

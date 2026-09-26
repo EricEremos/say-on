@@ -26,6 +26,9 @@ def main():
     test_files.append(test_directory / "room_lifecycle_expiry.test.sql")
     test_files.append(test_directory / "balance_catalog_v2.test.sql")
     test_files.append(test_directory / "realtime_publication.test.sql")
+    test_files.append(test_directory / "room_passwords.test.sql")
+    # The room lifecycle again, now on the password-aware join and create functions.
+    test_files.append(test_directory / "room_lifecycle_expiry.test.sql")
     binaries = {name: shutil.which(name) for name in ("initdb", "pg_ctl", "psql")}
     if not all(binaries.values()):
         raise SystemExit("Local PostgreSQL initdb, pg_ctl and psql are required.")
@@ -66,6 +69,12 @@ def main():
                 create function auth.uid() returns uuid language sql stable as
                 $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
                 grant usage on schema auth to anon, authenticated, service_role;
+                -- Hosted Supabase grants every new public table, function and sequence to the
+                -- client roles by default; model that so privilege tests see what production sees.
+                grant usage on schema public to anon, authenticated, service_role;
+                alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+                alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
+                alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
                 create publication supabase_realtime;
             """)
             count = 0

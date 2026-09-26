@@ -31,7 +31,11 @@ const failedRoomState = (): GroupRoomTransport => ({
   updateDisplayName: async () => false,
   createTransfer: () => undefined,
   acceptTransfer: () => undefined,
-  retry: () => undefined
+  retry: () => undefined,
+  passwordGate: null,
+  submitPassword: () => undefined,
+  roomLock: null,
+  setRoomPassword: async () => false
 });
 
 const completedRoundDraws: readonly GroupDraw[] = Array.from({ length: 5 }, (_, drawIndex) => ({
@@ -214,14 +218,16 @@ describe("WaitingRoom", () => {
     expect(markup).toContain("입장 완료");
   });
 
-  it("starts with the two Say-On entry actions without exposing the room directory", () => {
+  it("opens on the live room list with the two Say-On entry actions (owner request 2026-09-26)", () => {
     const markup = renderToStaticMarkup(<JoinPage />);
 
     expect(markup).toContain("Say-On");
     expect(markup).toContain("어떤 이야기부터");
     expect(markup).toContain("시작할까요?");
+    expect(markup).toContain("지금 열린 방");
+    expect(markup).toContain("LIVE");
     expect(markup).toContain("방 만들기");
-    expect(markup).toContain("초대 코드");
+    expect(markup).toContain("초대 코드로 참여");
     expect(markup).not.toContain("참여할 방");
     expect(markup).not.toContain("관리자");
     expect(markup).not.toMatch(legacyGroupNoun);

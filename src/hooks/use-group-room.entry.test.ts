@@ -47,8 +47,16 @@ describe("group room lobby transport", () => {
       capacity: 8,
       joinedCount: 0,
       phase: "waiting",
-      isRosterRoom: true
+      isRosterRoom: true,
+      hasPassword: false
     }]);
+  });
+
+  it("reads each room's lock and accepts finished rooms, so one of them cannot empty the list", () => {
+    expect(parseLobbyRooms([
+      { group_number: 21, room_name: "우리 팀 회식", capacity: 4, joined_count: 2, phase: "waiting", is_roster_room: false, has_password: true },
+      { group_number: 22, room_name: "생일 파티", capacity: 8, joined_count: 4, phase: "complete", is_roster_room: false, has_password: false }
+    ])?.map((room) => [room.groupNumber, room.phase, room.hasPassword])).toEqual([[21, "waiting", true], [22, "complete", false]]);
   });
 
   it("keeps retired roster rooms out of the fresh-room lobby", () => {
@@ -64,7 +72,8 @@ describe("group room lobby transport", () => {
       capacity: 4,
       joinedCount: 1,
       phase: "waiting",
-      isRosterRoom: false
+      isRosterRoom: false,
+      hasPassword: false
     }]);
   });
 

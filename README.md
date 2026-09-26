@@ -2,7 +2,7 @@
 
 **A conversation starts when someone has something worth saying.**
 
-Say-On 사연 is a shared Korean conversation game for friends, clubs, teams, classrooms, and first meetings. One person opens a room, everyone joins with a code, and the group draws one prompt to discuss together.
+Say-On 사연 is a shared Korean conversation game for friends, clubs, teams, classrooms, and first meetings. One person opens a room, everyone picks it from the live room list or joins with its code, and the group draws one prompt to discuss together. A host can lock the room with a short numeric password.
 
 <p align="center">
   <img src="public/images/say-on/shared-table-cutout-v1.webp" width="520" alt="A small round table with two cups and a deck of conversation cards.">

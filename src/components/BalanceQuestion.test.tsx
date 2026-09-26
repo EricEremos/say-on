@@ -34,15 +34,15 @@ describe("BalanceQuestion", () => {
     const choiceButtons = markup.match(/<button\b[\s\S]*?<\/button>/g) ?? [];
 
     expect(markup).toContain(balanceCards[0]!.choices.a);
-    expect(markup).toContain("balance-catalog-individual-v3/bal-v2-e01-a-v1.png");
-    expect(markup).toContain("balance-catalog-individual-v3/bal-v2-e01-b-v1.png");
+    expect(markup).toContain("balance-v4/bal-v2-e01-a.webp");
+    expect(markup).toContain("balance-v4/bal-v2-e01-b.webp");
     expect(markup).not.toContain("balance-choice-ritual-v1.png");
     expect(markup).not.toContain("cutout-v3.webp");
     expect(choiceButtons).toHaveLength(2);
     expect(choiceButtons[0]).toContain("say-balance__choice-art");
-    expect(choiceButtons[0]).toContain("bal-v2-e01-a-v1.png");
+    expect(choiceButtons[0]).toContain("bal-v2-e01-a.webp");
     expect(choiceButtons[1]).toContain("say-balance__choice-art");
-    expect(choiceButtons[1]).toContain("bal-v2-e01-b-v1.png");
+    expect(choiceButtons[1]).toContain("bal-v2-e01-b.webp");
   });
 
   it("keeps the active 60-question catalog bound to an explicit art source", () => {
@@ -51,9 +51,17 @@ describe("BalanceQuestion", () => {
     expect(balanceCards).toHaveLength(60);
     expect(assets).toHaveLength(120);
     expect(assets).toEqual(expect.arrayContaining([
-      "/images/say-on/balance-catalog-individual-v3/bal-v2-e01-a-v1.png",
-      "/images/say-on/balance-catalog-individual-v3/bal-v2-e01-b-v1.png",
-      "/images/say-on/balance-catalog-individual-v3/bal-v2-p15-b-v1.png",
+      "/images/say-on/balance-v4/bal-v2-e01-a.webp",
+      "/images/say-on/balance-v4/bal-v2-e01-b.webp",
+      "/images/say-on/balance-v4/bal-v2-p15-b.webp",
     ]));
+  });
+
+  it("maps every choice to its own generated image that exists in public/", () => {
+    const assets = balanceCards.flatMap((card) => Object.values(balanceArtFor(card)));
+    const shipped = new Set(Object.keys(import.meta.glob("/public/images/say-on/balance-v4/*.webp")).map((path) => path.replace(/^\/public/, "")));
+
+    expect(new Set(assets).size).toBe(120);
+    expect(assets.filter((asset) => !shipped.has(asset))).toEqual([]);
   });
 });

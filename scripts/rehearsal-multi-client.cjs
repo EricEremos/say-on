@@ -38,7 +38,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("playwright");
 
-const SCRIPT_VERSION = "1.1.0"; // 1.1.0: connected-mode card draw, exact tallies, pacing, known gaps only in rehearsal mode
+const SCRIPT_VERSION = "1.2.0"; // 1.2.0: connected mode creates a locked room; guests join from the lobby list and through the invite-code password gate
 const DEFAULT_ROOM_NAME = "QA rehearsal";
 const WAIT_TIMEOUT_MS = 6000;
 const SHORT_SETTLE_MS = 500; // below the 1s fixed-sleep ceiling; used only to let a fired-and-forgotten async write settle before reading
@@ -175,11 +175,16 @@ async function openJoinPage(page, baseUrl) {
   return await page.getByRole("heading", { level: 1 }).first().innerText();
 }
 
-async function createRoom(page, roomName) {
-  await page.getByRole("button", { name: "방 만들기", exact: true }).click();
+async function createRoom(page, roomName, password = null) {
+  // The empty lobby shows a second "방 만들기" inside its empty state; either opens the same sheet.
+  await page.getByRole("button", { name: "방 만들기", exact: true }).first().click();
   const nameField = page.getByRole("textbox", { name: "방 이름", exact: true });
   await nameField.waitFor({ timeout: WAIT_TIMEOUT_MS });
   await nameField.fill(roomName);
+  if (password !== null) {
+    await page.getByRole("switch").click();
+    await page.locator("#say-create-password").fill(password);
+  }
   await page.getByRole("button", { name: "만들기", exact: true }).click();
   await page.waitForURL(/\/room\?code=[A-F0-9]{8}/, { timeout: WAIT_TIMEOUT_MS, waitUntil: "domcontentloaded" });
   const code = inviteCodeFromUrl(page.url());
@@ -199,6 +204,39 @@ async function enterDisplayName(page, name) {
 async function joinRoomByInviteCode(page, baseUrl, code, name) {
   await page.goto(`${baseUrl}/room?code=${code}`, { waitUntil: "domcontentloaded" });
   return enterDisplayName(page, name);
+}
+
+// Lobby list -> locked-room sheet: one wrong password must be refused, then the right one admits.
+async function joinLockedRoomFromLobby(page, baseUrl, roomName, password, name) {
+  await openJoinPage(page, baseUrl);
+  const row = page.getByRole("button", { name: new RegExp(`^${roomName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}, .*비밀번호 필요$`) });
+  await row.waitFor({ timeout: WAIT_TIMEOUT_MS });
+  await row.click();
+  await page.locator("#say-locked-password").fill(password === "0000" ? "1111" : "0000");
+  await page.getByRole("button", { name: "입장하기", exact: true }).click();
+  await page.locator(".say-gate--error").waitFor({ timeout: WAIT_TIMEOUT_MS });
+  const refusal = (await page.locator(".say-gate--error").innerText()).replace(/\s+/g, " ").trim();
+  assert.ok(refusal.includes("비밀번호가 맞지 않아요"), `wrong password not refused: ${refusal}`);
+  await page.locator("#say-locked-password").fill(password);
+  await page.getByRole("button", { name: "입장하기", exact: true }).click();
+  await page.waitForURL(/\/room\?group=\d+/, { timeout: WAIT_TIMEOUT_MS, waitUntil: "domcontentloaded" });
+  const title = await enterDisplayName(page, name);
+  assert.equal(await page.locator("#room-password-heading").count(), 0, "the room page asked for the password again");
+  return { refusal, title };
+}
+
+// Invite code -> room page password gate -> waiting room.
+async function joinLockedRoomByInviteCode(page, baseUrl, code, password, name) {
+  await page.goto(`${baseUrl}/room?code=${code}`, { waitUntil: "domcontentloaded" });
+  const field = page.getByRole("textbox", { name: "방에서 사용할 이름" });
+  await field.waitFor({ timeout: WAIT_TIMEOUT_MS });
+  await field.fill(name);
+  await page.getByRole("button", { name: "내 이름으로 들어갑니다" }).click();
+  await page.locator("#room-password-heading").waitFor({ timeout: WAIT_TIMEOUT_MS });
+  await page.locator("#room-gate-password").fill(password);
+  await page.getByRole("button", { name: "입장하기", exact: true }).click();
+  await page.locator("#waiting-title").waitFor({ timeout: WAIT_TIMEOUT_MS });
+  return { gate: "asked", title: await page.locator("#waiting-title").innerText() };
 }
 
 async function rosterNames(page) {
@@ -383,20 +421,26 @@ async function runJourney({ mode, baseUrl, roomName, runs, headless }) {
     }
 
     let inviteCode = null;
+    // Connected mode exercises the lobby and the room password; browser-local rooms have neither.
+    const roomPassword = mode === "connected" ? "2580" : null;
 
     await evidence.step("host opens /join", "host", async () => await openJoinPage(host, baseUrl));
 
-    await evidence.step("host creates the room and lands on /room?code=", "host", async () => {
-      inviteCode = await createRoom(host, roomName);
+    await evidence.step(mode === "connected" ? "host creates a password-locked room and lands on /room?code=" : "host creates the room and lands on /room?code=", "host", async () => {
+      inviteCode = await createRoom(host, roomName, roomPassword);
       assert.equal(new URL(host.url()).pathname, "/room");
-      return { inviteCode, url: host.url() };
+      return { inviteCode, locked: roomPassword !== null };
     });
 
     await evidence.step("host enters a display name and reaches the waiting room", "host", async () => await enterDisplayName(host, "호스트"));
 
-    await evidence.step("guestA joins by invite code and enters a display name", "guestA", async () => await joinRoomByInviteCode(guestA, baseUrl, inviteCode, "게스트A"));
-
-    await evidence.step("guestB joins by invite code and enters a display name", "guestB", async () => await joinRoomByInviteCode(guestB, baseUrl, inviteCode, "게스트B"));
+    if (roomPassword !== null) {
+      await evidence.step("guestA joins from the lobby list: a wrong password is refused, the right one admits", "guestA", async () => await joinLockedRoomFromLobby(guestA, baseUrl, roomName, roomPassword, "게스트A"));
+      await evidence.step("guestB joins by invite code and passes the room password gate", "guestB", async () => await joinLockedRoomByInviteCode(guestB, baseUrl, inviteCode, roomPassword, "게스트B"));
+    } else {
+      await evidence.step("guestA joins by invite code and enters a display name", "guestA", async () => await joinRoomByInviteCode(guestA, baseUrl, inviteCode, "게스트A"));
+      await evidence.step("guestB joins by invite code and enters a display name", "guestB", async () => await joinRoomByInviteCode(guestB, baseUrl, inviteCode, "게스트B"));
+    }
 
     await evidence.step(
       "all three clients see the same member roster",

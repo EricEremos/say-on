@@ -5,12 +5,16 @@ import "./say-on.css";
 import { type TransportMode, useEventTransport } from "./hooks/use-event-transport";
 import { useGroupDraw } from "./hooks/use-group-draw";
 import type { GroupCardOption } from "./hooks/use-group-draw";
-import { useGroupRoom, useGroupRoomEntry } from "./hooks/use-group-room";
+import { useGroupRoom } from "./hooks/use-group-room";
+import { useGroupRoomEntry } from "./hooks/use-group-room-entry";
+import { RoomLobby } from "./components/RoomLobby";
+import { LockIcon, RoomPasswordGateCard, RoomPasswordSetting } from "./components/RoomPasswordForm";
+import { balanceArtFor } from "./lib/balance-art";
 import { emptyRoomActivity, type BalanceVote, type RoomActivityTransport, useRoomActivity } from "./hooks/use-room-activity";
 import { cardQuestion, cardQuestionIndex, maximumGroupDraws } from "./lib/group-draws";
 import { canSetExpectedAttendance, canStartGroup, cardThemeFor, cardThemes, isMyCardTurn, roomReadinessMessage } from "./lib/group-room";
 import { isValidNickname, normalizeNickname } from "./lib/nickname";
-import { balanceCards, type GameKey, questionCardBackForGame, questionForGameIndex, questionImageFor, questionImageForGame, questionStickerFor, questionStickerForGame, questionsForGame } from "./lib/questions";
+import { balanceCards, type BalanceCard, type GameKey, questionCardBackForGame, questionForGameIndex, questionImageFor, questionImageForGame, questionStickerFor, questionStickerForGame, questionsForGame } from "./lib/questions";
 import { canOpenNextIcebreakerCard } from "./lib/room-activity";
 import { canCreateRoomName, canJoinInviteRoom, groupRoomPath, inviteRoomPath, normalizeInviteCode, normalizeRoomName, roomGroupNumberFromSearchParams } from "./lib/room-entry";
 import {
@@ -78,63 +82,8 @@ export const persistRoomDisplayNameAfterRemoteUpdate = async (
 export const shouldShowRoomLoading = (mode: TransportMode, isLoadingRooms: boolean): boolean =>
   mode === "connecting" || isLoadingRooms;
 
-export const JoinPage = () => {
-  const { eventId, mode } = useEventTransport();
-  const { createRoom, isWorking, problem } = useGroupRoomEntry(eventId);
-  const [entry, setEntry] = useState<"create" | "invite" | null>(null);
-  const [roomName, setRoomName] = useState("");
-  const [inviteCode, setInviteCode] = useState("");
-  const field = useRef<HTMLInputElement>(null);
-  const createAction = useRef<HTMLButtonElement>(null);
-  const inviteAction = useRef<HTMLButtonElement>(null);
-  useEffect(() => { if (entry !== null) field.current?.focus(); }, [entry]);
-  const valid = entry === "create" ? canCreateRoomName(roomName) : canJoinInviteRoom(inviteCode);
-  const submit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
-    event.preventDefault();
-    if (isWorking || !valid || (entry === "create" && mode === "connecting")) return;
-    if (entry === "create") {
-      const room = await createRoom(normalizeRoomName(roomName));
-      if (room === null) return;
-      const path = inviteRoomPath(room.inviteCode);
-      if (path !== null) window.location.assign(path);
-    } else {
-      const path = inviteRoomPath(inviteCode);
-      if (path !== null) window.location.assign(path);
-    }
-  };
-  const goBack = (): void => {
-    const action = entry === "create" ? createAction : inviteAction;
-    setEntry(null);
-    requestAnimationFrame(() => action.current?.focus());
-  };
-  return (
-    <main className="say-arrival">
-      <header className="say-wordmark">Say-On <span className="say-brand-korean" lang="ko">사연</span></header>
-      <section className="say-arrival__content" aria-labelledby="say-heading">
-        <img className="say-arrival__art" src="/images/say-on/shared-table-cutout-v1.webp" alt="" width={640} height={585} />
-        <div className="say-arrival__entry">
-          {entry === null ? <>
-            <h1 id="say-heading">어떤 이야기부터<br />시작할까요?</h1>
-            <div className="say-arrival__actions">
-              <button ref={createAction} className="say-action" type="button" onClick={() => setEntry("create")}>방 만들기</button>
-              <button ref={inviteAction} className="say-action say-action--secondary" type="button" onClick={() => setEntry("invite")}>초대 코드로 참여</button>
-            </div>
-          </> : <>
-            <button className="say-back" type="button" disabled={isWorking} onClick={goBack}>← 돌아가기</button>
-            <h1 id="say-heading">{entry === "create" ? "함께할 방을 만들어요." : "같은 방에서 만나요."}</h1>
-            <form className="say-entry-form" onSubmit={(event) => { void submit(event); }} aria-busy={isWorking}>
-              <label htmlFor="say-entry-field">{entry === "create" ? "방 이름" : "초대 코드"}</label>
-              <input ref={field} id="say-entry-field" value={entry === "create" ? roomName : inviteCode} onChange={(event) => entry === "create" ? setRoomName(event.target.value) : setInviteCode(normalizeInviteCode(event.target.value))} maxLength={entry === "create" ? 40 : 8} autoComplete="off" autoCapitalize={entry === "create" ? "sentences" : "characters"} spellCheck={false} placeholder={entry === "create" ? "우리 모임" : "8자리 코드"} />
-              {entry === "create" ? <p className="say-entry-note">15분 동안 활동이 없으면 방이 사라져요.</p> : null}
-              <button className="say-action" disabled={!valid || isWorking || (entry === "create" && mode === "connecting")} type="submit">{isWorking ? "만드는 중…" : entry === "create" ? "만들기" : "입장하기"}</button>
-              {entry === "create" && problem !== null ? <p className="say-entry-error" role="alert">{problem}</p> : null}
-            </form>
-          </>}
-        </div>
-      </section>
-    </main>
-  );
-};
+/** Arrival: the live room list with create, invite-code and password entry (approved 2026-09-26). */
+export const JoinPage = () => <RoomLobby />;
 
 const RoomManagementPage = () => {
   const { eventId, mode, problem } = useEventTransport();
@@ -444,6 +393,7 @@ export const WaitingRoom = ({ roomState, activity = emptyRoomActivity() }: Reado
       <div className="waiting-room__flow">
       <div className="waiting-room__intro">
         <h1 id="waiting-title" ref={waitingTitle} tabIndex={-1}>함께 시작할<br />준비를 해요.</h1>
+        {roomState.roomLock?.hasPassword ? <p className="say-room-lock"><LockIcon size={14} />비밀번호 방</p> : null}
       </div>
       {room.isHost ? <section className="game-selection" aria-labelledby="game-selection-title">
         <h2 id="game-selection-title">게임을 선택해 주세요.</h2>
@@ -481,6 +431,7 @@ export const WaitingRoom = ({ roomState, activity = emptyRoomActivity() }: Reado
             <p className="attendance-control__note">입장한 인원보다 적게 설정할 수 없어요.</p>
           </section>
         ) : null}
+        {roomState.roomLock !== null ? <RoomPasswordSetting hasPassword={roomState.roomLock.hasPassword} disabled={isWorking} onSave={roomState.setRoomPassword} /> : null}
       </details> : null}
       {problem !== null ? <p className="room-problem" role="alert">{problem}</p> : null}
       <p className="room-return"><a href="/join" onClick={handleLeaveRoom}>처음으로</a></p>
@@ -525,6 +476,18 @@ const QuestionAtlas = ({ unlockedQuestionIndexes, onClose, closeLabel = "돌아�
   );
 };
 
+/** Balance card back: the question's two choice images with a small "VS" (approved game-art board). */
+const BalanceCardPair = ({ card }: Readonly<{ card: BalanceCard }>) => {
+  const art = balanceArtFor(card);
+  return (
+    <span className="question-card__pair" aria-hidden="true">
+      <img src={art.a} alt="" width={96} height={96} />
+      <small>VS</small>
+      <img src={art.b} alt="" width={96} height={96} />
+    </span>
+  );
+};
+
 const CardChoices = ({ sun, drawIndex, roundNumber = 1, game = "icebreaker", cardOptions = [], selectedCardIndex = null, disabled = false, onChoose }: Readonly<{ sun: number; drawIndex: number; roundNumber?: number; game?: GameKey; cardOptions?: readonly GroupCardOption[]; selectedCardIndex?: number | null; disabled?: boolean; onChoose: (cardIndex: number) => void }>) => (
   <div className="question-cards">
     {cardThemes.map((card, cardIndex) => {
@@ -534,7 +497,9 @@ const CardChoices = ({ sun, drawIndex, roundNumber = 1, game = "icebreaker", car
       <button className={`question-card question-card--${card.materialKey}${selected ? " question-card--selected" : ""}`} key={card.materialKey} type="button" disabled={disabled} onClick={() => onChoose(cardIndex)} aria-pressed={selected} aria-label={`${cardIndex + 1}번 카드${selected ? ", 선택됨" : ""}`}>
         <img className="question-card__art" src={questionCardBackForGame(game, questionIndex)} alt="" aria-hidden="true" />
         <b className="question-card__wash" aria-hidden="true" />
-        <img className="question-card__illustration" src={questionStickerForGame(game, questionIndex)} alt="" aria-hidden="true" />
+        {game === "balance" && balanceCards[questionIndex] !== undefined
+          ? <BalanceCardPair card={balanceCards[questionIndex]!} />
+          : <img className="question-card__illustration" src={questionStickerForGame(game, questionIndex)} alt="" aria-hidden="true" />}
         <span className="question-card__number" aria-hidden="true">{cardIndex + 1}</span>
       </button>
       );
@@ -634,6 +599,7 @@ const RoomPage = () => {
   const drawState = useGroupDraw(eventId, groupNumber, roomState.room?.roundNumber ?? 1, roomState.room !== null, roomState.room?.revision ?? 0, roomState.room?.phase ?? null, roomState.room?.selectedGame ?? "icebreaker", roomState.room?.participantCount ?? 1, roomState.room?.turnPosition ?? 0);
   const activity = useRoomActivity(eventId, groupNumber, roomState.room, drawState.draws.at(-1) ?? null, roomState.room !== null);
   const isLive = roomState.room?.phase === "live";
+  const isPasswordGated = displayName !== null && roomState.room === null && roomState.passwordGate !== null;
   const handleLeaveRoom = (event: MouseEvent<HTMLAnchorElement>): void => {
     if (roomState.room === null) return;
     event.preventDefault();
@@ -643,12 +609,12 @@ const RoomPage = () => {
     if (roomState.releasedToLobby) window.location.replace("/join");
   }, [roomState.releasedToLobby]);
   return (
-    <main className={`room-shell${isLive && roomState.room?.selectedGame === "balance" ? " room-shell--balance" : ""}${!hasValidRoomTarget || displayName === null ? " say-arrival say-room-entry" : " room-shell--say"}`}>
+    <main className={`room-shell${isLive && roomState.room?.selectedGame === "balance" ? " room-shell--balance" : ""}${!hasValidRoomTarget || displayName === null || isPasswordGated ? " say-arrival say-room-entry" : " room-shell--say"}`}>
       <div className="room-shell__image" aria-hidden="true" />
       <div className="room-shell__wash" aria-hidden="true" />
       <header className="room-topline"><a href="/join" className="brand" onClick={handleLeaveRoom}>Say-On <span className="say-brand-korean" lang="ko">사연</span></a></header>
       {displayName !== null && roomState.room !== null && roomState.inviteCode !== null && !roomState.releasedToLobby ? <RoomInviteCode inviteCode={roomState.inviteCode} /> : null}
-      {!hasValidRoomTarget ? <section className="connection-card"><h1>방 정보를 확인해 주세요.</h1><a className="button button--quiet" href="/join">처음으로</a></section> : displayName === null ? <section className="connection-card" aria-labelledby="room-name-heading"><h1 id="room-name-heading">이름을 정하고<br />방에 들어가요.</h1><p className="room-identity">함께하는 사람들이 알아볼 수 있는 이름을 사용해 주세요.</p><form onSubmit={(event) => { event.preventDefault(); enterRoom(); }}><label className="nickname-field" htmlFor="room-display-name"><span>방에서 사용할 이름</span><input id="room-display-name" value={displayNameDraft} onChange={(event) => setDisplayNameDraft(event.target.value)} maxLength={12} placeholder="예: 하늘" autoComplete="nickname" autoFocus /><small>한글, 영문, 숫자를 포함해 2자에서 12자로 입력해 주세요.</small></label><Button disabled={!canEnterRoom} type="submit">내 이름으로 들어갑니다 <span aria-hidden="true">→</span></Button></form></section> : roomState.releasedToLobby ? <section className="connection-card" role="status"><h1>메뉴로 돌아가고 있어요.</h1></section> : roomState.isJoining || mode === "connecting" ? <section className="connection-card"><h1>방에 들어가고 있어요.</h1></section> : isLive ? <LiveRoom sun={groupNumber ?? 1} roomState={roomState} drawState={drawState} activity={activity} /> : <WaitingRoom roomState={roomState} activity={activity} />}
+      {!hasValidRoomTarget ? <section className="connection-card"><h1>방 정보를 확인해 주세요.</h1><a className="button button--quiet" href="/join">처음으로</a></section> : displayName === null ? <section className="connection-card" aria-labelledby="room-name-heading"><h1 id="room-name-heading">이름을 정하고<br />방에 들어가요.</h1><p className="room-identity">함께하는 사람들이 알아볼 수 있는 이름을 사용해 주세요.</p><form onSubmit={(event) => { event.preventDefault(); enterRoom(); }}><label className="nickname-field" htmlFor="room-display-name"><span>방에서 사용할 이름</span><input id="room-display-name" value={displayNameDraft} onChange={(event) => setDisplayNameDraft(event.target.value)} maxLength={12} placeholder="예: 하늘" autoComplete="nickname" autoFocus /><small>한글, 영문, 숫자를 포함해 2자에서 12자로 입력해 주세요.</small></label><Button disabled={!canEnterRoom} type="submit">내 이름으로 들어갑니다 <span aria-hidden="true">→</span></Button></form></section> : roomState.releasedToLobby ? <section className="connection-card" role="status"><h1>메뉴로 돌아가고 있어요.</h1></section> : isPasswordGated && roomState.passwordGate !== null ? <RoomPasswordGateCard gate={roomState.passwordGate} isJoining={roomState.isJoining} onSubmit={roomState.submitPassword} /> : roomState.isJoining || mode === "connecting" ? <section className="connection-card"><h1>방에 들어가고 있어요.</h1></section> : isLive ? <LiveRoom sun={groupNumber ?? 1} roomState={roomState} drawState={drawState} activity={activity} /> : <WaitingRoom roomState={roomState} activity={activity} />}
       {mode === "error" ? <ModeNote problem={problem} /> : null}
     </main>
   );
@@ -751,7 +717,11 @@ const LiveBalanceQAPage = () => {
     updateDisplayName: async () => false,
     createTransfer: () => undefined,
     acceptTransfer: () => undefined,
-    retry: () => undefined
+    retry: () => undefined,
+    passwordGate: null,
+    submitPassword: () => undefined,
+    roomLock: null,
+    setRoomPassword: async () => false
   };
   const draw = { sun: 7, roundNumber: 1, drawIndex: 0, cardIndex: 0, questionIndex: 0, chosenAt: "2026-09-14T06:00:00.000Z" };
   const drawState: DrawState = {
@@ -815,7 +785,11 @@ const LiveIcebreakerQAPage = () => {
     updateDisplayName: async () => false,
     createTransfer: () => undefined,
     acceptTransfer: () => undefined,
-    retry: () => undefined
+    retry: () => undefined,
+    passwordGate: null,
+    submitPassword: () => undefined,
+    roomLock: null,
+    setRoomPassword: async () => false
   };
   const draw = { sun: 7, roundNumber: 1, drawIndex: 0, cardIndex: 1, questionIndex: 2, chosenAt: "2026-09-14T06:00:00.000Z" };
   const reveal = stage === "reveal";

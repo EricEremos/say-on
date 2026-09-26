@@ -40,8 +40,9 @@ begin
       and b.draws = (select jsonb_agg(d) from public.group_draws d where group_number=2)
       and b.votes = (select jsonb_agg(v) from public.group_balance_votes v where group_number=2)
   ) then raise exception 'migration changed existing room data'; end if;
-  if has_function_privilege('anon', 'public.select_group_game(uuid,smallint,text)', 'execute')
-    or not has_function_privilege('authenticated', 'public.select_group_game(uuid,smallint,text)', 'execute')
+  -- Signed-out (anon) execute is asserted after 20260926090000, which revokes Supabase's default
+  -- function grants from anon (room_passwords.test.sql).
+  if not has_function_privilege('authenticated', 'public.select_group_game(uuid,smallint,text)', 'execute')
   then raise exception 'selection grants changed'; end if;
 end $$;
 

@@ -6,6 +6,8 @@ import { isValidNickname, normalizeNickname } from "../lib/nickname";
 import { balanceCatalogId, remoteGameKey, type GameKey } from "../lib/questions";
 import { createRehearsalRoom, findRehearsalRoom, readRehearsalRooms } from "../lib/rehearsal-rooms";
 import { canCreateRoomName, canJoinInviteRoom, normalizeInviteCode, normalizeRoomName } from "../lib/room-entry";
+import { LOBBY_REFRESH_MS } from "../lib/room-lobby";
+import { browserSessionStore, isValidRoomPassword, parseRoomPasswordGate, pendingRoomPasswordKey, takePendingRoomPassword, type RoomPasswordGate } from "../lib/room-password";
 import { realtimeStatusProblem } from "../lib/realtime-status";
 import { supabase } from "../lib/supabase";
 
@@ -51,7 +53,8 @@ const RemoteRoomEntrySchema = z.object({
 const RemoteCreatedRoomSchema = z.object({
   groupNumber: z.number().int().min(1).max(32767),
   roomName: z.string().min(2).max(40),
-  inviteCode: z.string().regex(/^[A-F0-9]{8}$/)
+  inviteCode: z.string().regex(/^[A-F0-9]{8}$/),
+  hasPassword: z.boolean().optional()
 });
 
 const RemoteLobbyRoomWireSchema = z.object({
@@ -59,8 +62,14 @@ const RemoteLobbyRoomWireSchema = z.object({
   room_name: z.string().min(2).max(40),
   capacity: z.number().int().min(2).max(20),
   joined_count: z.number().int().min(0).max(20),
-  phase: z.enum(["waiting", "live"]),
-  is_roster_room: z.boolean()
+  phase: z.enum(["waiting", "live", "complete"]),
+  is_roster_room: z.boolean(),
+  has_password: z.boolean().optional()
+});
+
+const RemoteRoomLockSchema = z.object({
+  hasPassword: z.boolean(),
+  isHost: z.boolean()
 });
 
 const RemoteRoomStatusSchema = z.object({
@@ -76,9 +85,12 @@ export type GroupRoomLobbyEntry = Readonly<{
   roomName: string;
   capacity: number;
   joinedCount: number;
-  phase: "waiting" | "live";
+  phase: "waiting" | "live" | "complete";
   isRosterRoom: boolean;
+  hasPassword: boolean;
 }>;
+export type RoomLock = Readonly<{ hasPassword: boolean; isHost: boolean }>;
+export type RoomPasswordCheck = RoomPasswordGate | "ok" | null;
 export type CreatedGroupRoom = Readonly<{
   groupNumber: number;
   roomName: string;
@@ -124,8 +136,17 @@ export const parseLobbyRooms = (candidate: unknown): readonly GroupRoomLobbyEntr
     capacity: room.capacity,
     joinedCount: room.joined_count,
     phase: room.phase,
-    isRosterRoom: room.is_roster_room
+    isRosterRoom: room.is_roster_room,
+    hasPassword: room.has_password ?? false
   }));
+};
+
+/** Thrown inside a join when the server answered with a password gate instead of a room. */
+class RoomPasswordGateError extends Error {}
+
+export const parseRoomLock = (candidate: unknown): RoomLock | null => {
+  const parsed = RemoteRoomLockSchema.safeParse(candidate);
+  return parsed.success ? parsed.data : null;
 };
 
 export const visibleLobbyRooms = (rooms: readonly GroupRoomLobbyEntry[]): readonly GroupRoomLobbyEntry[] =>
@@ -157,14 +178,26 @@ export type GroupRoomTransport = Readonly<{
   createTransfer: () => void;
   acceptTransfer: (code: string) => void;
   retry: () => void;
+  /** Set when the server asks for, rejects, or pauses the room password. */
+  passwordGate: RoomPasswordGate | null;
+  submitPassword: (password: string) => void;
+  /** Lock state for members (badge and host settings); null in rehearsal mode or before joining. */
+  roomLock: RoomLock | null;
+  setRoomPassword: (password: string | null) => Promise<boolean>;
 }>;
 
 export type GroupRoomEntryTransport = Readonly<{
   rooms: readonly GroupRoomLobbyEntry[];
   isLoadingRooms: boolean;
-  createRoom: (roomName: string) => Promise<CreatedGroupRoom | null>;
+  createRoom: (roomName: string, password?: string | null) => Promise<CreatedGroupRoom | null>;
   isWorking: boolean;
   problem: string | null;
+  /** The last list refresh failed; the list keeps its previous rooms. */
+  listProblem: string | null;
+  refreshRooms: () => void;
+  verifyRoomPassword: (groupNumber: number, password: string) => Promise<RoomPasswordCheck>;
+  /** Passwords need the shared server; browser-local rehearsal rooms have none. */
+  supportsPasswords: boolean;
 }>;
 
 const initialRehearsalRoom = (): GroupRoom => ({
@@ -241,7 +274,11 @@ const useRehearsalGroupRoom = (inviteCode: string | null): GroupRoomTransport =>
     updateDisplayName,
     createTransfer: () => setTransfer({ code: "BEEF12A4", expiresAt: new Date(Date.now() + 600_000).toISOString() }),
     acceptTransfer: () => undefined,
-    retry: () => undefined
+    retry: () => undefined,
+    passwordGate: null,
+    submitPassword: () => undefined,
+    roomLock: null,
+    setRoomPassword: async () => false
   };
 };
 
@@ -266,6 +303,20 @@ const useRemoteGroupRoom = (eventId: string | null, inviteCode: string | null, r
   const [transfer, setTransfer] = useState<HostTransfer | null>(null);
   const [joinAttempt, setJoinAttempt] = useState(0);
   const [releasedToLobby, setReleasedToLobby] = useState(false);
+  // The room password lives only in memory (and, from the lobby, one hop through this tab's
+  // session store); it is sent with the join call and never placed in the URL.
+  const passwordRef = useRef<string | null>(null);
+  const [passwordGate, setPasswordGate] = useState<RoomPasswordGate | null>(null);
+  const [roomLock, setRoomLock] = useState<RoomLock | null>(null);
+  // Only the newest join may write state; a late answer to an older join is ignored.
+  const joinSequence = useRef(0);
+
+  useEffect(() => {
+    if (eventId === null || requestedGroupNumber === null) return;
+    const store = browserSessionStore();
+    const pending = store === null ? null : takePendingRoomPassword(store, pendingRoomPasswordKey(eventId, requestedGroupNumber));
+    if (pending !== null) passwordRef.current = pending;
+  }, [eventId, requestedGroupNumber]);
 
   const applyEntry = useCallback((candidate: unknown): boolean => {
     const parsed = RemoteRoomEntrySchema.safeParse(candidate);
@@ -277,12 +328,23 @@ const useRemoteGroupRoom = (eventId: string | null, inviteCode: string | null, r
 
   const rejoinFreshRoom = useCallback(async (): Promise<void> => {
     if (client === null || eventId === null) return;
+    joinSequence.current += 1;
+    const sequence = joinSequence.current;
+    const passwordParam = passwordRef.current === null ? {} : { p_password: passwordRef.current };
     const result = canJoinByCode
-      ? await client.rpc("join_group_room_by_code", { p_event_id: eventId, p_invite_code: normalizedInviteCode, p_display_name: normalizedDisplayName })
+      ? await client.rpc("join_group_room_by_code", { p_event_id: eventId, p_invite_code: normalizedInviteCode, p_display_name: normalizedDisplayName, ...passwordParam })
       : requestedGroupNumber !== null
-        ? await client.rpc("join_group_room_by_number", { p_event_id: eventId, p_group_number: requestedGroupNumber, p_display_name: normalizedDisplayName })
+        ? await client.rpc("join_group_room_by_number", { p_event_id: eventId, p_group_number: requestedGroupNumber, p_display_name: normalizedDisplayName, ...passwordParam })
         : null;
-    if (result === null || result.error !== null || !applyEntry(result.data)) throw new Error("room refresh failed");
+    if (sequence !== joinSequence.current) return;
+    if (result === null || result.error !== null) throw new Error("room refresh failed");
+    const gate = parseRoomPasswordGate(result.data);
+    if (gate !== null) {
+      setPasswordGate(gate);
+      throw new RoomPasswordGateError();
+    }
+    if (!applyEntry(result.data)) throw new Error("room refresh failed");
+    setPasswordGate(null);
   }, [applyEntry, canJoinByCode, client, eventId, normalizedDisplayName, normalizedInviteCode, requestedGroupNumber]);
 
   const refreshCurrentRoom = useCallback(async (): Promise<void> => {
@@ -295,6 +357,7 @@ const useRemoteGroupRoom = (eventId: string | null, inviteCode: string | null, r
 
   const releaseRoomToLobby = useCallback((): void => {
     setReleasedToLobby(true);
+    setPasswordGate(null);
     setRoom(null);
   }, []);
 
@@ -335,8 +398,8 @@ const useRemoteGroupRoom = (eventId: string | null, inviteCode: string | null, r
     const join = async (): Promise<void> => {
       try {
         await rejoinFreshRoom();
-      } catch {
-        if (active) setProblem("방에 들어오지 못했습니다. 다시 확인해 주세요.");
+      } catch (error) {
+        if (active && !(error instanceof RoomPasswordGateError)) setProblem("방에 들어오지 못했습니다. 다시 확인해 주세요.");
       } finally {
         if (active) setIsJoining(false);
       }
@@ -500,130 +563,37 @@ const useRemoteGroupRoom = (eventId: string | null, inviteCode: string | null, r
   }, [eventId, groupNumber, invokeRoomAction]);
   const retry = useCallback((): void => { if (!isJoining) setJoinAttempt((attempt) => attempt + 1); }, [isJoining]);
 
-  if (client === null) return null;
-  return { groupNumber, inviteCode: normalizedInviteCode, room, isJoining, isWorking, releasedToLobby, problem: problem ?? channelProblem, transfer, setExpectedAttendance, selectGame, setReady, start, returnToGameSelection, returnToEventMenu, leaveRoom, updateDisplayName, createTransfer, acceptTransfer, retry };
-};
+  const submitPassword = useCallback((password: string): void => {
+    passwordRef.current = password;
+    setJoinAttempt((attempt) => attempt + 1);
+  }, []);
 
-const useRemoteGroupRoomEntry = (eventId: string | null): GroupRoomEntryTransport | null => {
-  const client = supabase;
-  const [rooms, setRooms] = useState<readonly GroupRoomLobbyEntry[]>([]);
-  const [isLoadingRooms, setIsLoadingRooms] = useState(true);
-  const [isWorking, setIsWorking] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-
-  const loadRooms = useCallback(async (): Promise<readonly GroupRoomLobbyEntry[] | null> => {
-    if (client === null || eventId === null) return null;
-    const result = await client.rpc("list_group_rooms", { p_event_id: eventId });
-    const loadedRooms = parseLobbyRooms(result.data);
-    if (result.error !== null || loadedRooms === null) throw new Error("room list failed");
-    const visibleRooms = visibleLobbyRooms(loadedRooms);
-    setRooms(visibleRooms);
-    return visibleRooms;
-  }, [client, eventId]);
+  const loadRoomLock = useCallback(async (): Promise<void> => {
+    if (client === null || eventId === null || groupNumber === null) return;
+    const result = await client.rpc("get_group_room_lock", { p_event_id: eventId, p_group_number: groupNumber });
+    const parsed = parseRoomLock(result.data);
+    if (result.error === null && parsed !== null) setRoomLock(parsed);
+  }, [client, eventId, groupNumber]);
 
   useEffect(() => {
-    if (client === null || eventId === null) {
-      setRooms([]);
-      setIsLoadingRooms(false);
-      return undefined;
-    }
-    let active = true;
-    setIsLoadingRooms(true);
-    const load = async (): Promise<void> => {
-      try {
-        await loadRooms();
-      } catch {
-        if (active) setProblem("방 목록을 불러오지 못했습니다.");
-      } finally {
-        if (active) setIsLoadingRooms(false);
-      }
-    };
-    void load();
-    return () => { active = false; };
-  }, [client, eventId, loadRooms]);
+    if (!hasRoom) return;
+    void loadRoomLock().catch(() => undefined);
+  }, [hasRoom, loadRoomLock]);
 
-  const createRoom = useCallback(async (roomName: string): Promise<CreatedGroupRoom | null> => {
-    if (isWorking) return null;
-    if (client === null || eventId === null) {
-      setProblem("연결을 준비하지 못해 방을 만들 수 없어요. 새로고침 후 다시 시도해 주세요.");
-      return null;
+  const setRoomPassword = useCallback(async (password: string | null): Promise<boolean> => {
+    if (client === null || eventId === null || groupNumber === null) return false;
+    if (password !== null && !isValidRoomPassword(password)) return false;
+    const result = await client.rpc("set_group_room_password", { p_event_id: eventId, p_group_number: groupNumber, p_password: password });
+    if (result.error !== null) {
+      setProblem("비밀번호를 바꾸지 못했어요. 다시 시도해 주세요.");
+      return false;
     }
-    const normalizedRoomName = normalizeRoomName(roomName);
-    setIsWorking(true);
-    setProblem(null);
-    try {
-      const result = await client.rpc("create_group_room", { p_event_id: eventId, p_room_name: normalizedRoomName, p_expected_attendance: 4 });
-      const created = parseCreatedGroupRoom(result.data);
-      if (result.error !== null || created === null) throw new Error("room creation failed");
-      const createdRoom: GroupRoomLobbyEntry = {
-        groupNumber: created.groupNumber,
-        roomName: created.roomName,
-        capacity: 4,
-        joinedCount: 0,
-        phase: "waiting",
-        isRosterRoom: false
-      };
-      setRooms((current) => [...current.filter((room) => room.groupNumber !== createdRoom.groupNumber), createdRoom].sort((left, right) => left.groupNumber - right.groupNumber));
-      return created;
-    } catch {
-      setProblem("새 방을 만들지 못했습니다. 이름을 다시 확인해 주세요.");
-      return null;
-    } finally {
-      setIsWorking(false);
-    }
-  }, [client, eventId, isWorking]);
+    await loadRoomLock().catch(() => undefined);
+    return true;
+  }, [client, eventId, groupNumber, loadRoomLock]);
 
   if (client === null) return null;
-  return { rooms, isLoadingRooms, createRoom, isWorking, problem };
-};
-
-const useRehearsalGroupRoomEntry = (): GroupRoomEntryTransport => {
-  const [rooms, setRooms] = useState<readonly GroupRoomLobbyEntry[]>(() => readRehearsalRooms().map((room) => ({
-    groupNumber: room.groupNumber,
-    roomName: room.roomName,
-    capacity: 4,
-    joinedCount: 0,
-    phase: "waiting",
-    isRosterRoom: false
-  })));
-  const [isWorking, setIsWorking] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  const createRoom = useCallback(async (roomName: string): Promise<CreatedGroupRoom | null> => {
-    if (isWorking) return null;
-    const normalizedRoomName = normalizeRoomName(roomName);
-    if (!canCreateRoomName(normalizedRoomName)) {
-      setProblem("방 이름을 2자에서 40자로 입력해 주세요.");
-      return null;
-    }
-    setIsWorking(true);
-    setProblem(null);
-    try {
-      const created = createRehearsalRoom(normalizedRoomName);
-      if (created === null) throw new Error("rehearsal room creation failed");
-      const createdRoom: GroupRoomLobbyEntry = {
-        groupNumber: created.groupNumber,
-        roomName: created.roomName,
-        capacity: 4,
-        joinedCount: 0,
-        phase: "waiting",
-        isRosterRoom: false
-      };
-      setRooms((current) => [...current.filter((room) => room.groupNumber !== createdRoom.groupNumber), createdRoom].sort((left, right) => left.groupNumber - right.groupNumber));
-      return created;
-    } catch {
-      setProblem("새 방을 만들지 못했습니다. 이름을 다시 확인해 주세요.");
-      return null;
-    } finally {
-      setIsWorking(false);
-    }
-  }, [isWorking]);
-  return { rooms, isLoadingRooms: false, createRoom, isWorking, problem };
-};
-
-export const useGroupRoomEntry = (eventId: string | null): GroupRoomEntryTransport => {
-  const remote = useRemoteGroupRoomEntry(eventId);
-  const rehearsal = useRehearsalGroupRoomEntry();
-  return remote ?? rehearsal;
+  return { groupNumber, inviteCode: normalizedInviteCode, room, isJoining, isWorking, releasedToLobby, problem: problem ?? channelProblem, transfer, setExpectedAttendance, selectGame, setReady, start, returnToGameSelection, returnToEventMenu, leaveRoom, updateDisplayName, createTransfer, acceptTransfer, retry, passwordGate, submitPassword, roomLock, setRoomPassword };
 };
 
 export const useGroupRoom = (eventId: string | null, inviteCode: string | null, requestedGroupNumber: number | null = null, displayName: string | null = null): GroupRoomTransport => {
